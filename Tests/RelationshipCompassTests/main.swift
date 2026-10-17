@@ -225,6 +225,56 @@ func testCSVParsing_invalidImportanceDefaultsNormal() {
     expectEqual(result.contacts[0].cadenceDays, 7, "每周 → 7 天")
 }
 
+// MARK: - 待联系推导边界（T8）
+
+func testDueDerivation() {
+    let cal = Calendar.current
+    let now = Date.now
+    func days(_ d: Int) -> Date {
+        cal.date(byAdding: .day, value: d, to: now) ?? now
+    }
+
+    // 从未联系 → 待联系
+    let never = Contact(name: "从未", importance: .normal, interactions: [])
+    expect(never.isDue == true, "从未联系应待联系")
+    expect(never.lastContactDate == nil, "从未联系无上次联系时间")
+    expectEqual(never.dueLabel, "从未联系", "从未联系文案")
+
+    // 默认频率：重要→30，一般→90，普通→180
+    let important = Contact(name: "重要", importance: .important,
+                            interactions: [Interaction(date: days(-1), method: .phone)])
+    let normal = Contact(name: "一般", importance: .normal,
+                         interactions: [Interaction(date: days(-1), method: .phone)])
+    let ordinary = Contact(name: "普通", importance: .ordinary,
+                           interactions: [Interaction(date: days(-1), method: .phone)])
+    expectEqual(important.effectiveCadenceDays, 30, "重要默认 30 天")
+    expectEqual(normal.effectiveCadenceDays, 90, "一般默认 90 天")
+    expectEqual(ordinary.effectiveCadenceDays, 180, "普通默认 180 天")
+
+    // 自定义频率覆盖默认
+    let custom = Contact(name: "自定义", importance: .ordinary, cadenceDays: 21,
+                         interactions: [Interaction(date: days(-1), method: .phone)])
+    expectEqual(custom.effectiveCadenceDays, 21, "自定义 21 天覆盖默认")
+
+    // 逾期边界：90 天频率，91 天前联系 → 逾期 1 天；89 天前联系 → 未到期
+    let overdue = Contact(name: "逾期", importance: .normal,
+                          interactions: [Interaction(date: days(-91), method: .phone)])
+    expect(overdue.isDue == true, "逾期应待联系")
+    expect(overdue.dueLabel != nil, "逾期应有文案")
+
+    let upcoming = Contact(name: "未到期", importance: .normal,
+                           interactions: [Interaction(date: days(-89), method: .phone)])
+    expect(upcoming.isDue == false, "未逾期不应待联系")
+    expect(upcoming.dueLabel == nil, "未到期无逾期文案")
+
+    // 上次联系时间取最新一条
+    let multi = Contact(name: "多条", importance: .normal,
+                        interactions: [Interaction(date: days(-300), method: .phone),
+                                       Interaction(date: days(-10), method: .email)])
+    expectEqual(multi.lastContactDate, multi.interactions.map(\.date).max(), "上次联系取最新")
+    expect(multi.isDue == false, "近期联系过不应待联系")
+}
+
 testSeedData()
 testStore()
 testListOrder()
@@ -236,6 +286,7 @@ testCSVParsing_basic()
 testCSVParsing_noHeaderAndCustomDays()
 testCSVParsing_escapedQuoteAndEmptyCadence()
 testCSVParsing_invalidImportanceDefaultsNormal()
+testDueDerivation()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

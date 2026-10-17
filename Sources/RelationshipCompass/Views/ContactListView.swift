@@ -1,14 +1,43 @@
 import SwiftUI
 
-/// 中间栏联系人列表（T1 先为空壳，T2 填充内容）
+/// 中间栏联系人列表：按当前视图过滤，支持姓名/公司/职位搜索
 struct ContactListView: View {
     @Binding var selection: Contact.ID?
     let section: SidebarSection
+    @EnvironmentObject private var store: ContactStore
+    @State private var searchText = ""
+
+    private var filtered: [Contact] {
+        var list = store.contacts(in: section)
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty {
+            list = list.filter {
+                $0.name.localizedCaseInsensitiveContains(query)
+                    || $0.company.localizedCaseInsensitiveContains(query)
+                    || $0.position.localizedCaseInsensitiveContains(query)
+            }
+        }
+        return list
+    }
 
     var body: some View {
-        List(selection: $selection) {
-            // 占位，T2 实现
+        Group {
+            if filtered.isEmpty {
+                ContentUnavailableView(
+                    "没有联系人",
+                    systemImage: "person.crop.circle.badge.questionmark",
+                    description: Text("当前视图或搜索条件下没有联系人")
+                )
+            } else {
+                List(selection: $selection) {
+                    ForEach(filtered) { contact in
+                        ContactRowView(contact: contact)
+                            .tag(contact.id)
+                    }
+                }
+            }
         }
+        .searchable(text: $searchText, prompt: "搜索姓名、公司、职位")
         .navigationTitle(section.rawValue)
     }
 }

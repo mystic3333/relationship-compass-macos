@@ -73,8 +73,45 @@ func testStore() {
     expectEqual(store.count(in: .due), 0, "待联系计数应随之更新")
 }
 
+// MARK: - 列表排序与视图过滤（T2）
+
+func testListOrder() {
+    let now = Date.now
+    func days(_ d: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: -d, to: now) ?? now
+    }
+    let importantOld = Contact(name: "重要旧", importance: .important,
+                               interactions: [Interaction(date: days(100), method: .phone)])
+    let importantNew = Contact(name: "重要新", importance: .important,
+                               interactions: [Interaction(date: days(2), method: .phone)])
+    let importantNever = Contact(name: "重要从未", importance: .important, interactions: [])
+    let normal = Contact(name: "一般", importance: .normal,
+                         interactions: [Interaction(date: days(5), method: .phone)])
+
+    let sorted = [normal, importantOld, importantNever, importantNew].sorted(by: Contact.listOrder)
+    expectEqual(sorted.map(\.name), ["重要从未", "重要新", "重要旧", "一般"],
+                "排序：重要度优先，同级从未联系在前，其次最近联系在前")
+}
+
+func testStoreContactsInSection() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("contacts.json")
+    let store = ContactStore(seedIfEmpty: false, fileURL: url)
+    store.addContact(Contact(name: "重要A", importance: .important,
+                             interactions: [Interaction(date: Date.now, method: .phone)]))
+    store.addContact(Contact(name: "普通B", importance: .ordinary, interactions: []))
+    store.addContact(Contact(name: "重要C", importance: .important, interactions: []))
+
+    expectEqual(store.contacts(in: .important).map(\.name), ["重要C", "重要A"], "重要视图只含重要联系人且按列表序")
+    expectEqual(store.contacts(in: .due).map(\.name), ["重要C", "普通B"], "待联系视图含从未联系者，重要度优先")
+    expectEqual(store.contacts(in: .all).count, 3, "全部视图含所有联系人")
+}
+
 testSeedData()
 testStore()
+testListOrder()
+testStoreContactsInSection()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

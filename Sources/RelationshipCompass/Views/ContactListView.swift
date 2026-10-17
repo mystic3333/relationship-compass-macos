@@ -6,6 +6,7 @@ struct ContactListView: View {
     let section: SidebarSection
     @EnvironmentObject private var store: ContactStore
     @State private var searchText = ""
+    @State private var showCSVImport = false
 
     private var filtered: [Contact] {
         var list = store.contacts(in: section)
@@ -39,5 +40,19 @@ struct ContactListView: View {
         }
         .searchable(text: $searchText, prompt: "搜索姓名、公司、职位")
         .navigationTitle(section.rawValue)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showCSVImport = true
+                } label: {
+                    Label("导入 CSV", systemImage: "square.and.arrow.down")
+                }
+                .help("按固定模板批量导入联系人")
+            }
+        }
+        .sheet(isPresented: $showCSVImport) {
+            CSVImportView()
+                .environmentObject(store)
+        }
     }
 }

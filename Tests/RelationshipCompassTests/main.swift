@@ -175,6 +175,56 @@ func testDeleteInteractionRecalculatesDue() {
     expect(afterDelete.interactions.isEmpty, "互动记录应被移除")
 }
 
+// MARK: - CSV 解析（T7）
+
+func testCSVParsing_basic() {
+    let csv = """
+    姓名,公司,职位,电话,邮箱,备注,重要度,联系频率
+    张三,某某公司,经理,13812345678,zhang@x.com,备注,重要,每月
+    "李,四",,主管,,,含逗号,一般,每季
+    ,,职位,,,缺姓名,普通,每周
+    """
+    let result = CSVImporter.parse(csv)
+    expectEqual(result.contacts.count, 2, "应导入 2 条，跳过缺姓名行")
+    expectEqual(result.skippedRows, 1, "缺姓名行应被跳过")
+
+    let zhang = result.contacts[0]
+    expectEqual(zhang.name, "张三", "姓名")
+    expectEqual(zhang.company, "某某公司", "公司")
+    expectEqual(zhang.position, "经理", "职位")
+    expectEqual(zhang.importance, .important, "重要度映射")
+    expectEqual(zhang.cadenceDays, 30, "每月 → 30 天")
+
+    let li = result.contacts[1]
+    expectEqual(li.name, "李,四", "引号包裹的逗号")
+    expectEqual(li.notes, "含逗号", "备注列")
+    expectEqual(li.importance, .normal, "一般 → normal")
+    expectEqual(li.cadenceDays, 90, "每季 → 90 天")
+}
+
+func testCSVParsing_noHeaderAndCustomDays() {
+    let result = CSVImporter.parse("王五,公司,,,,,普通,14")
+    expectEqual(result.contacts.count, 1, "无表头也能导入")
+    expectEqual(result.contacts[0].name, "王五", "姓名")
+    expectEqual(result.contacts[0].importance, .ordinary, "普通 → ordinary")
+    expectEqual(result.contacts[0].cadenceDays, 14, "数字频率解析为自定义天数")
+}
+
+func testCSVParsing_escapedQuoteAndEmptyCadence() {
+    // 标准 CSV：字段整体用引号包裹，内部双引号以 "" 转义
+    let result = CSVImporter.parse("赵六,公司,职位,,,\"他说\"\"好的\"\"\",重要,")
+    expectEqual(result.contacts.count, 1, "转义引号行应导入")
+    expectEqual(result.contacts[0].notes, "他说\"好的\"", "双引号转义")
+    expectEqual(result.contacts[0].cadenceDays, nil, "留空频率 → 按重要度默认")
+}
+
+func testCSVParsing_invalidImportanceDefaultsNormal() {
+    let result = CSVImporter.parse("钱七,公司,,,,,超级重要,每周")
+    expectEqual(result.contacts.count, 1, "非法重要度容错")
+    expectEqual(result.contacts[0].importance, .normal, "非法重要度回退为一般")
+    expectEqual(result.contacts[0].cadenceDays, 7, "每周 → 7 天")
+}
+
 testSeedData()
 testStore()
 testListOrder()
@@ -182,6 +232,10 @@ testStoreContactsInSection()
 testCountsUpdateAfterMutations()
 testUpdateContact()
 testDeleteInteractionRecalculatesDue()
+testCSVParsing_basic()
+testCSVParsing_noHeaderAndCustomDays()
+testCSVParsing_escapedQuoteAndEmptyCadence()
+testCSVParsing_invalidImportanceDefaultsNormal()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

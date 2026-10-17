@@ -51,11 +51,11 @@
 
 ## Implementation Decisions
 
-- **技术栈**：SwiftUI + SwiftData，Swift Package 可执行目标，`platforms: .macOS(.v14)`。命令行 `swift build` / `swift run` 构建运行；应用启动时设置 `NSApp.setActivationPolicy(.regular)` 并激活窗口（参见 ADR-0001）。
-- **界面结构**：`NavigationSplitView` 三栏 —— 侧边栏（SidebarSection：全部/重要/待联系，带计数）+ 列表栏（搜索 + 联系人行）+ 详情栏（资料、频率、互动记录、工具栏操作）。列表选中通过联系人 `PersistentModelID` 判定相等（`Contact: Hashable`）。
-- **数据模型**：
-  - `Contact`：姓名、公司、职位、电话、邮箱、备注、重要度（存 raw string）、联系间隔天数 `cadenceDays: Int?`（nil=按重要度默认）、创建时间、互动记录数组（级联删除）。
-  - `Interaction`：日期、方式（存 raw string）、备注、所属联系人（反向关系）。
+- **技术栈**：SwiftUI + Codable JSON 存储（`ContactStore: ObservableObject`，`@Published contacts`，读写 Application Support 下 `contacts.json`），Swift Package 可执行目标，`platforms: .macOS(.v14)`。命令行 `swift build` / `swift run` 构建运行；应用启动时设置 `NSApp.setActivationPolicy(.regular)` 并激活窗口（存储选择见 ADR-0004，构建方式见 ADR-0001）。
+- **界面结构**：`NavigationSplitView` 三栏 —— 侧边栏（SidebarSection：全部/重要/待联系，带计数）+ 列表栏（搜索 + 联系人行）+ 详情栏（资料、频率、互动记录、工具栏操作）。列表选中通过联系人 `id`（UUID）绑定。
+- **数据模型**（Codable 结构体，见 ADR-0004）：
+  - `Contact`：姓名、公司、职位、电话、邮箱、备注、重要度、联系间隔天数 `cadenceDays: Int?`（nil=按重要度默认）、创建时间、互动记录数组（删除联系人时一并删除）。
+  - `Interaction`：日期、方式、备注、所属联系人。
   - 枚举：`ImportanceLevel`（重要/一般/普通，含 `sortOrder` 与 `defaultCadenceDays`）、`InteractionMethod`（电话/微信/邮件/见面/其他）、`CadenceOption`（按重要度默认/每周/每月/每季/自定义，映射 7/30/90 天）。
 - **待联系推导（ADR-0002）**：`lastContactDate = 互动记录中最新日期`（不存储）；`dueDate = lastContactDate + effectiveCadenceDays`；`isDue = lastContactDate == nil 或 dueDate < 今天`（从未联系视为待联系）。删除互动记录会影响推导结果，因此删除互动需确认。
 - **默认频率（未设置时）**：重要→每月(30)，一般→每季(90)，普通→每半年(180)。
@@ -66,10 +66,11 @@
 ## Testing Decisions
 
 - **好测试的标准**：只测外部行为，不测实现细节。即给定"互动记录集合 + 频率/重要度"，断言推导出的 上次联系时间、是否待联系、逾期天数；给定 CSV 文本，断言解析出的联系人字段。
-- **测试切入点（seam）**：新增测试 target，使用 **in-memory SwiftData 容器**（`ModelConfiguration(isStoredInMemoryOnly: true)`）加载同一数据模型，对领域推导逻辑与 CSV 解析器做单元测试。这是全项目唯一的测试 seam，UI 层不做自动化测试。
+- **测试切入点（seam）**：新增测试 target，测试运行于 **内存数组 + 临时文件 ContactStore**（不触碰真实 Application Support），对领域推导逻辑（上次联系时间/待联系/排序）与 CSV 解析器做单元测试。这是全项目唯一的测试 seam，UI 层不做自动化测试。
 - **被测模块**：
   1. 待联系推导逻辑（`Contact` 的 `lastContactDate` / `dueDate` / `isDue` / `dueLabel`，覆盖：从未联系、频率默认与自定义、逾期边界）
   2. CSV 解析器（模板解析、引号字段、表头跳过、无效行跳过、重要度/频率映射容错）
+  3. `ContactStore` 持久化（空文件首次写入种子、再次加载不重复写入）
 - **先行参照**：本项目为全新代码库，无既有测试；以 XCTest（`swift test`）建立第一个测试 target 为后续测试的样板。
 
 ## Out of Scope

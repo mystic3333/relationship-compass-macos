@@ -129,11 +129,35 @@ func testCountsUpdateAfterMutations() {
     expectEqual(store.count(in: .due), 0, "删除后待联系 0")
 }
 
+// MARK: - 联系人更新（T5）
+
+func testUpdateContact() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("contacts.json")
+    let store = ContactStore(seedIfEmpty: false, fileURL: url)
+
+    var c = Contact(name: "甲", importance: .normal)
+    store.addContact(c)
+    c = store.contact(id: c.id)!
+    c.importance = .important
+    c.cadenceDays = 7
+    c.company = "新公司"
+    store.updateContact(c)
+
+    let reloaded = store.contact(id: c.id)!
+    expectEqual(reloaded.importance, .important, "重要度应更新")
+    expectEqual(reloaded.cadenceDays, 7, "频率应更新")
+    expectEqual(reloaded.company, "新公司", "公司应更新")
+    expectEqual(reloaded.name, "甲", "姓名保持不变")
+}
+
 testSeedData()
 testStore()
 testListOrder()
 testStoreContactsInSection()
 testCountsUpdateAfterMutations()
+testUpdateContact()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

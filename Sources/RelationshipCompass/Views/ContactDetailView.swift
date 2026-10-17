@@ -4,6 +4,8 @@ import SwiftUI
 struct ContactDetailView: View {
     let contact: Contact?
     @EnvironmentObject private var store: ContactStore
+    @State private var showEditSheet = false
+    @State private var showDeleteConfirm = false
 
     /// 始终取 store 中最新值，避免展示陈旧数据
     private var current: Contact? {
@@ -79,6 +81,26 @@ struct ContactDetailView: View {
                     interactionsSection(c)
                 }
                 .padding(20)
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button("编辑") { showEditSheet = true }
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                }
+            }
+            .sheet(isPresented: $showEditSheet) {
+                ContactFormView(existing: current)
+                    .environmentObject(store)
+            }
+            .alert("删除联系人", isPresented: $showDeleteConfirm) {
+                Button("删除", role: .destructive) {
+                    store.deleteContact(id: c.id)
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("将删除 \(c.name) 及其全部互动记录，此操作不可撤销。")
             }
         } else {
             ContentUnavailableView(

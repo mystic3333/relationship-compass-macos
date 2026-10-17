@@ -108,10 +108,32 @@ func testStoreContactsInSection() {
     expectEqual(store.contacts(in: .all).count, 3, "全部视图含所有联系人")
 }
 
+// MARK: - 侧边栏计数随变更联动（T3）
+
+func testCountsUpdateAfterMutations() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("contacts.json")
+    let store = ContactStore(seedIfEmpty: false, fileURL: url)
+
+    expectEqual(store.count(in: .all), 0, "空库全部 0")
+    store.addContact(Contact(name: "甲", importance: .important, interactions: []))
+    store.addContact(Contact(name: "乙", importance: .ordinary,
+                             interactions: [Interaction(date: Date.now, method: .phone)]))
+    expectEqual(store.count(in: .all), 2, "全部 2")
+    expectEqual(store.count(in: .important), 1, "重要 1")
+    expectEqual(store.count(in: .due), 1, "待联系 1（从未联系的甲）")
+
+    store.deleteContact(id: store.contacts[0].id)
+    expectEqual(store.count(in: .all), 1, "删除后全部 1")
+    expectEqual(store.count(in: .due), 0, "删除后待联系 0")
+}
+
 testSeedData()
 testStore()
 testListOrder()
 testStoreContactsInSection()
+testCountsUpdateAfterMutations()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

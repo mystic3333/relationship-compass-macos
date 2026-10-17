@@ -20,5 +20,12 @@ struct ContentView: View {
             ContactDetailView(contact: selectedContact)
         }
         .navigationTitle("人脉罗盘")
+        .onChange(of: section ?? .all) { _, newSection in
+            // 切换视图时，若选中联系人不在新视图内则清空选中
+            guard let id = selectedID else { return }
+            if !store.contacts(in: newSection).contains(where: { $0.id == id }) {
+                selectedID = nil
+            }
+        }
     }
 }

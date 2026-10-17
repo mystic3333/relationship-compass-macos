@@ -152,12 +152,36 @@ func testUpdateContact() {
     expectEqual(reloaded.name, "甲", "姓名保持不变")
 }
 
+// MARK: - 互动记录删除联动（T6）
+
+func testDeleteInteractionRecalculatesDue() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("contacts.json")
+    let store = ContactStore(seedIfEmpty: false, fileURL: url)
+
+    let newContact = Contact(name: "甲", importance: .important, interactions: [])
+    store.addContact(newContact)
+    let id = store.contacts[0].id
+
+    store.addInteraction(Interaction(date: Date.now, method: .phone), to: id)
+    let afterAdd = store.contact(id: id)!
+    expect(afterAdd.isDue == false, "添加互动后不再待联系")
+
+    let interactionID = afterAdd.interactions[0].id
+    store.deleteInteraction(id: interactionID, from: id)
+    let afterDelete = store.contact(id: id)!
+    expect(afterDelete.isDue == true, "删除唯一互动后回到待联系")
+    expect(afterDelete.interactions.isEmpty, "互动记录应被移除")
+}
+
 testSeedData()
 testStore()
 testListOrder()
 testStoreContactsInSection()
 testCountsUpdateAfterMutations()
 testUpdateContact()
+testDeleteInteractionRecalculatesDue()
 
 print("")
 print("通过 \(passed) / \(passed + failed)")

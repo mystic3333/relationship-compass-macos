@@ -6,6 +6,8 @@ struct ContactDetailView: View {
     @EnvironmentObject private var store: ContactStore
     @State private var showEditSheet = false
     @State private var showDeleteConfirm = false
+    @State private var showAddInteractionSheet = false
+    @State private var pendingDeleteInteraction: Interaction?
 
     /// 始终取 store 中最新值，避免展示陈旧数据
     private var current: Contact? {
@@ -69,6 +71,15 @@ struct ContactDetailView: View {
         )
     }
 
+    // MARK: - 互动删除确认绑定
+
+    private var deleteAlertBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteInteraction != nil },
+            set: { if !$0 { pendingDeleteInteraction = nil } }
+        )
+    }
+
     // MARK: - 主体
 
     var body: some View {
@@ -85,6 +96,9 @@ struct ContactDetailView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button("编辑") { showEditSheet = true }
+                    Button { showAddInteractionSheet = true } label: {
+                        Label("添加互动", systemImage: "plus.bubble")
+                    }
                     Button(role: .destructive) { showDeleteConfirm = true } label: {
                         Label("删除", systemImage: "trash")
                     }
@@ -93,6 +107,18 @@ struct ContactDetailView: View {
             .sheet(isPresented: $showEditSheet) {
                 ContactFormView(existing: current)
                     .environmentObject(store)
+            }
+            .sheet(isPresented: $showAddInteractionSheet) {
+                InteractionFormView(contactID: c.id)
+                    .environmentObject(store)
+            }
+            .alert("删除互动记录", isPresented: deleteAlertBinding, presenting: pendingDeleteInteraction) { item in
+                Button("删除", role: .destructive) {
+                    store.deleteInteraction(id: item.id, from: c.id)
+                }
+                Button("取消", role: .cancel) {}
+            } message: { _ in
+                Text("删除后将重新计算上次联系时间与待联系状态。")
             }
             .alert("删除联系人", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {
@@ -233,6 +259,15 @@ struct ContactDetailView: View {
                         Text(interaction.date, style: .relative)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
+                        Button {
+                            pendingDeleteInteraction = interaction
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("删除这条互动记录")
                     }
                     .padding(.vertical, 2)
                 }
